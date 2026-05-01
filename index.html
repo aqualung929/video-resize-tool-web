@@ -7,7 +7,31 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <p>建置中…</p>
+  <div class="container">
+    <h1>影片 1:1 Resize 工具</h1>
+
+    <div id="dropZone" class="drop-zone">
+      <span id="dropLabel">拖曳影片到這裡，或點擊選擇檔案</span>
+      <input type="file" id="fileInput" multiple accept="video/*" hidden>
+    </div>
+
+    <div class="file-list-container">
+      <div class="file-list-header">已選擇的檔案</div>
+      <div id="fileList" class="file-list"></div>
+    </div>
+
+    <div class="controls">
+      <span class="color-label">背景顏色：</span>
+      <div id="colorSwatch" class="color-swatch"></div>
+      <button id="colorBtn" class="btn btn-secondary">選擇顏色</button>
+      <input type="color" id="colorPicker" value="#000000" hidden>
+      <button id="clearBtn" class="btn btn-gray">清除佇列</button>
+      <button id="actionBtn" class="btn btn-primary" disabled>載入中…</button>
+    </div>
+
+    <div id="statusBar" class="status-bar">FFmpeg 載入中，請稍候…</div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
