@@ -1,5 +1,21 @@
-// sw.js
-// This service worker injects Cross-Origin-Opener-Policy and
-// Cross-Origin-Embedder-Policy headers on all responses.
-// These headers are required for SharedArrayBuffer, which FFmpeg.wasm needs.
-// GitHub Pages does not support custom server headers, so the SW is the workaround.
+self.addEventListener('install', () => self.skipWaiting());
+
+self.addEventListener('activate', e =>
+  e.waitUntil(self.clients.claim())
+);
+
+self.addEventListener('fetch', e => {
+  e.respondWith(
+    fetch(e.request).then(response => {
+      const headers = new Headers(response.headers);
+      headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+      headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+      headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    })
+  );
+});
