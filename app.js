@@ -63,3 +63,61 @@ async function loadFFmpeg() {
     console.error('[FFmpeg load error]', err);
   }
 }
+
+// ── File input ────────────────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () =>
+  dropZone.classList.remove('drag-over')
+);
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  addFiles([...e.dataTransfer.files]);
+});
+
+fileInput.addEventListener('change', () => {
+  addFiles([...fileInput.files]);
+  fileInput.value = '';
+});
+
+function addFiles(files) {
+  const videoExts = /\.(mp4|mov|avi|mkv|wmv|m4v|flv)$/i;
+  for (const file of files) {
+    if (!file.type.startsWith('video/') && !videoExts.test(file.name)) continue;
+    if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) continue;
+    selectedFiles.push(file);
+    const row = createFileRow(file);
+    fileList.appendChild(row.el);
+    fileRows.set(file, row);
+  }
+  statusBar.textContent = `已選擇 ${selectedFiles.length} 個檔案`;
+}
+
+function createFileRow(file) {
+  const el = document.createElement('div');
+  el.className = 'file-row';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'file-name';
+  nameEl.textContent = file.name;
+
+  const trackEl = document.createElement('div');
+  trackEl.className = 'progress-track';
+  const fillEl = document.createElement('div');
+  fillEl.className = 'progress-fill';
+  trackEl.appendChild(fillEl);
+
+  const statusEl = document.createElement('span');
+  statusEl.className = 'file-status';
+  statusEl.textContent = '等待中';
+
+  el.append(nameEl, trackEl, statusEl);
+  return { el, fillEl, statusEl };
+}
