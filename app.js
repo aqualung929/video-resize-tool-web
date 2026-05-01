@@ -146,6 +146,7 @@ actionBtn.addEventListener('click', () => {
 });
 
 async function startConversion() {
+  if (!ffmpeg) { statusBar.textContent = 'FFmpeg 尚未載入'; return; }
   isRunning = true;
   stopFlag = false;
   actionBtn.textContent = '停止';
@@ -185,42 +186,52 @@ async function startConversion() {
 
 function getOutputName(filename) {
   const dot = filename.lastIndexOf('.');
-  return dot === -1
-    ? filename + '_1x1'
-    : filename.slice(0, dot) + '_1x1' + filename.slice(dot);
+  const base = dot === -1 ? filename : filename.slice(0, dot);
+  return base + '_1x1.mp4';
 }
 
 function getVideoMeta(file) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
+    const objectURL = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(objectURL);
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Metadata read timed out for "${file.name}"`));
+    }, 10_000);
+
     video.onloadedmetadata = () => {
-      const meta = {
-        width: video.videoWidth,
-        height: video.videoHeight,
-        duration: video.duration,
-      };
-      URL.revokeObjectURL(video.src);
-      resolve(meta);
+      clearTimeout(timer);
+      cleanup();
+      resolve({ width: video.videoWidth, height: video.videoHeight, duration: video.duration });
     };
-    video.src = URL.createObjectURL(file);
+    video.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error(`Cannot read metadata for "${file.name}"`));
+    };
+    video.src = objectURL;
   });
 }
 
 async function convertFile(file, fillEl) {
+  const ext = file.name.slice(file.name.lastIndexOf('.')) || '.mp4';
+  const inputName = 'input' + ext;
+  const outputName = 'output.mp4';
+  let inputWritten = false;
+
   try {
     const { width, height, duration } = await getVideoMeta(file);
     const size = Math.max(width, height);
     const color = bgColor.replace('#', '');
 
-    const ext = file.name.slice(file.name.lastIndexOf('.')) || '.mp4';
-    const inputName = 'input' + ext;
-    const outputName = 'output.mp4';
-
     currentDuration = duration;
     currentFillEl = fillEl;
 
     await ffmpeg.writeFile(inputName, await fetchFile(file));
+    inputWritten = true;
 
     await ffmpeg.exec([
       '-i', inputName,
@@ -237,7 +248,7 @@ async function convertFile(file, fillEl) {
     ]);
 
     const data = await ffmpeg.readFile(outputName);
-    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    const blob = new Blob([data], { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -245,20 +256,20 @@ async function convertFile(file, fillEl) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
-
-    currentDuration = 0;
-    currentFillEl = null;
     fillEl.style.width = '100%';
     return true;
   } catch (err) {
     console.error('[convertFile error]', err);
+    return false;
+  } finally {
     currentDuration = 0;
     currentFillEl = null;
-    return false;
+    if (inputWritten) {
+      await ffmpeg.deleteFile(inputName).catch(() => {});
+    }
+    await ffmpeg.deleteFile(outputName).catch(() => {});
   }
 }
 
