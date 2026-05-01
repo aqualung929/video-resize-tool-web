@@ -121,3 +121,152 @@ function createFileRow(file) {
   el.append(nameEl, trackEl, statusEl);
   return { el, fillEl, statusEl };
 }
+
+// ── Color picker ──────────────────────────────────────────
+colorBtn.addEventListener('click', () => colorPicker.click());
+
+colorPicker.addEventListener('input', () => {
+  bgColor = colorPicker.value;
+  colorSwatch.style.backgroundColor = bgColor;
+});
+
+// ── Action button ─────────────────────────────────────────
+actionBtn.addEventListener('click', () => {
+  if (isRunning) {
+    stopFlag = true;
+    actionBtn.textContent = '停止中…';
+    actionBtn.disabled = true;
+  } else {
+    if (selectedFiles.length === 0) {
+      statusBar.textContent = '請先選擇影片檔案';
+      return;
+    }
+    startConversion();
+  }
+});
+
+async function startConversion() {
+  isRunning = true;
+  stopFlag = false;
+  actionBtn.textContent = '停止';
+  clearBtn.disabled = true;
+
+  let completed = 0;
+  const total = selectedFiles.length;
+
+  for (const file of selectedFiles) {
+    if (stopFlag) break;
+
+    const row = fileRows.get(file);
+    row.statusEl.textContent = '轉換中';
+
+    const ok = await convertFile(file, row.fillEl);
+
+    if (ok) {
+      completed++;
+      row.statusEl.textContent = '完成';
+      statusBar.textContent =
+        `${completed} / ${total} 完成　最新：${getOutputName(file.name)} 已下載`;
+    } else {
+      row.statusEl.textContent = stopFlag ? '已停止' : '失敗';
+    }
+  }
+
+  isRunning = false;
+  stopFlag = false;
+  actionBtn.textContent = '開始轉換';
+  actionBtn.disabled = false;
+  clearBtn.disabled = false;
+
+  statusBar.textContent = completed === total
+    ? `全部完成！共轉換 ${completed} 個檔案`
+    : `已停止。完成 ${completed} / ${total} 個`;
+}
+
+function getOutputName(filename) {
+  const dot = filename.lastIndexOf('.');
+  return dot === -1
+    ? filename + '_1x1'
+    : filename.slice(0, dot) + '_1x1' + filename.slice(dot);
+}
+
+function getVideoMeta(file) {
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const meta = {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration,
+      };
+      URL.revokeObjectURL(video.src);
+      resolve(meta);
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+async function convertFile(file, fillEl) {
+  try {
+    const { width, height, duration } = await getVideoMeta(file);
+    const size = Math.max(width, height);
+    const color = bgColor.replace('#', '');
+
+    const ext = file.name.slice(file.name.lastIndexOf('.')) || '.mp4';
+    const inputName = 'input' + ext;
+    const outputName = 'output.mp4';
+
+    currentDuration = duration;
+    currentFillEl = fillEl;
+
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-vf',
+        `scale=${size}:${size}:force_original_aspect_ratio=decrease,` +
+        `pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:0x${color}`,
+      '-c:v', 'libx264',
+      '-crf', '18',
+      '-preset', 'slow',
+      '-c:a', 'copy',
+      '-pix_fmt', 'yuv420p',
+      '-y',
+      outputName,
+    ]);
+
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getOutputName(file.name);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+
+    currentDuration = 0;
+    currentFillEl = null;
+    fillEl.style.width = '100%';
+    return true;
+  } catch (err) {
+    console.error('[convertFile error]', err);
+    currentDuration = 0;
+    currentFillEl = null;
+    return false;
+  }
+}
+
+// ── Clear queue ───────────────────────────────────────────
+clearBtn.addEventListener('click', () => {
+  if (isRunning) return;
+  selectedFiles = [];
+  fileRows.clear();
+  fileList.innerHTML = '';
+  statusBar.textContent = '佇列已清除';
+});
