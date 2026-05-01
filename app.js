@@ -1,4 +1,4 @@
-import { FFmpeg } from './ffmpeg/index.js';
+import { FFmpeg } from './ffmpeg/ffmpeg.js';
 import { fetchFile, toBlobURL } from 'https://esm.sh/@ffmpeg/util@0.12.1';
 
 // ── DOM refs ──────────────────────────────────────────────
