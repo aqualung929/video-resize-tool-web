@@ -53,6 +53,10 @@ async function loadFFmpeg() {
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      workerURL: await toBlobURL(
+        'https://esm.sh/@ffmpeg/ffmpeg@0.12.10/es2022/worker.js',
+        'text/javascript'
+      ),
     });
 
     actionBtn.textContent = '開始轉換';
